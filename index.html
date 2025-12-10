@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Relatório de Performance - Infracommerce</title>
+    <link rel="icon" href="ico.png" type="image/png">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.1.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="light-mode">
+
+<div class="container">
+    <div id="statusLog">Aguardando dados...</div>
+    <div id="chartError" style="display:none; background:#ffcdd2; color:#b71c1c; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #ef9a9a;">
+        <strong>Erro:</strong> Bibliotecas gráficas não carregadas. Verifique sua conexão.
+    </div>
+
+    <header>
+        <div class="header-brand">
+            <img src="logo.png" alt="Logo" onerror="this.style.display='none'; document.getElementById('fb-logo').style.display='block';">
+            <div id="fb-logo" style="display:none; font-weight:800; font-size:1.5rem;"><span style="color:var(--text-main);">INFRA</span><span style="color:var(--brand-accent);">COMMERCE</span></div>
+            <div class="header-title"><h1>Dashboard de Field Services</h1><p>Performance & SLA</p></div>
+        </div>
+        <div class="header-controls-wrapper">
+            <div class="header-actions">
+                <button class="btn-action btn-theme" onclick="toggleTheme()"><span id="themeIcon">🌙</span> Tema</button>
+                <button class="btn-action" style="background-color: var(--danger);" onclick="clearLocalData()" title="Limpar dados salvos"><span>🗑️</span> Reset</button>
+                
+                <input type="file" id="csvInput" accept=".csv" onchange="handleFileSelect(event)">
+                <button class="btn-action" onclick="document.getElementById('csvInput').click()"><span>📂</span> Importar</button>
+                <button class="btn-action btn-export" onclick="downloadCSV()"><span>⬇️</span> Exportar</button>
+            </div>
+            <div style="text-align: right; font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">Base Relatório: <span id="currentDate">-</span></div>
+        </div>
+    </header>
+
+    <div class="tab-nav">
+        <button class="tab-button active" onclick="openTab(event, 'tab-mensal')">Análise Mensal</button>
+        <button class="tab-button" onclick="openTab(event, 'tab-geral')">Visão Geral</button>
+        <button class="tab-button" onclick="openTab(event, 'tab-equipe')">Equipe & Unidades</button>
+        <button class="tab-button" onclick="openTab(event, 'tab-status')">Status & Prazos</button>
+    </div>
+
+    <div id="tab-mensal" class="tab-content active">
+        <div class="controls">
+            <div class="control-group"><label>Ano</label><select id="yearSelect" onchange="updateMonthSelect()"></select></div>
+            <div class="control-group"><label>Mês</label><select id="monthSelect" onchange="updateMonthlyView()"></select></div>
+        </div>
+        
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-title">Entregas no Mês</div>
+                <div class="kpi-value" id="monthlyTotal">-</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">SLA do Mês</div>
+                <div class="kpi-value" id="monthlySLA">-</div>
+                <div class="kpi-sub">% Dentro do Prazo</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">TMA do Mês</div>
+                <div class="kpi-value" id="monthlySMA">-</div>
+                <div class="kpi-sub">Tempo Médio</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-container"><div class="chart-header"><span>Volume de Aberturas</span><button class="btn-expand" onclick="openFullscreenMode(0)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlyChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>SLA (Entregas)</span><button class="btn-expand" onclick="openFullscreenMode(1)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlySlaChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Status Chamados do mês</span><button class="btn-expand" onclick="openFullscreenMode(2)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlyStatusChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Tipos de chamados</span><button class="btn-expand" onclick="openFullscreenMode(3)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlyTypeChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Top Unidades (Entregas)</span><button class="btn-expand" onclick="openFullscreenMode(4)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlyUnitsChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Categorias de chamados (Mês)</span><button class="btn-expand" onclick="openFullscreenMode(14)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlyCategoryChart"></canvas></div></div>
+            
+            <div class="chart-container full-width">
+                <div class="chart-header"><span>Top 10 Solicitantes - Mês</span><button class="btn-expand" onclick="openFullscreenMode(15)">⛶</button></div>
+                <div class="chart-wrapper-inner"><canvas id="monthlyRequesterChart"></canvas></div>
+            </div>
+
+            <div class="chart-container"><div class="chart-header"><span>Top 10 Abertura de chamados x Centros de Custo (Mês)</span><button class="btn-expand" onclick="openFullscreenMode(17)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlyCCustoChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Top 10 Abertura de chamados x Funções (Mês)</span><button class="btn-expand" onclick="openFullscreenMode(18)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="monthlyRoleChart"></canvas></div></div>
+
+            <div class="chart-container full-width"><div class="chart-header"><span>Analistas x Unidade (Entregas)</span><button class="btn-expand" onclick="openFullscreenMode(5)">⛶</button></div>
+                <div class="chart-wrapper-inner" style="height: 400px; padding-right: 30px;"><canvas id="monthlyAssigneeChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="perf-container" style="margin-top:20px;">
+            <div class="perf-header">Top 5 Solicitantes x Unidade (Caso haja top 5) - Visão Mensal</div>
+            <div class="charts-grid">
+                <div class="chart-container"><div class="chart-header"><span>Extrema</span><button class="btn-expand" onclick="openFullscreenMode(21)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="mUnitChartExtrema"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Serra</span><button class="btn-expand" onclick="openFullscreenMode(22)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="mUnitChartSerra"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Embu DCR</span><button class="btn-expand" onclick="openFullscreenMode(23)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="mUnitChartEmbu"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Vila Olímpia</span><button class="btn-expand" onclick="openFullscreenMode(24)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="mUnitChartVila"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Duque de Caxias</span><button class="btn-expand" onclick="openFullscreenMode(25)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="mUnitChartDuque"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Outras Localidades</span><button class="btn-expand" onclick="openFullscreenMode(26)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="mUnitChartOther"></canvas></div></div>
+            </div>
+        </div>
+
+        <div class="perf-container">
+            <div class="perf-header">Performance Analista (Entregas)<button class="btn-expand" style="float:right;" onclick="openFullscreenMode(6)">⛶</button></div>
+            <div class="perf-table-wrapper">
+                <table class="perf-table" id="tableAssignee">
+                    <thead><tr><th>Analista</th><th>Tickets</th><th>SLA (%)</th><th>TMA</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="perf-container"><div class="perf-header">Performance Unidade (Entregas)<button class="btn-expand" style="float:right;" onclick="openFullscreenMode(7)">⛶</button></div><div class="perf-table-wrapper"><table class="perf-table" id="tableUnit"><thead><tr><th>Unidade</th><th>Tickets</th><th>SLA (%)</th><th>TMA</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+
+    <div id="tab-geral" class="tab-content">
+        <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-title">Total Histórico</div><div class="kpi-value" id="kpiTotal">-</div></div>
+            <div class="kpi-card"><div class="kpi-title">SLA Geral</div><div class="kpi-value" id="kpiSLA" style="color:var(--warning)">-</div></div>
+            <div class="kpi-card"><div class="kpi-title">TMA Geral</div><div class="kpi-value" id="kpiSMA" style="color:var(--success)">-</div></div>
+            <div class="kpi-card"><div class="kpi-title">Maior Demanda</div><div class="kpi-value" id="kpiLocation" style="color:var(--text-accent); font-size:1.6rem;">-</div></div>
+        </div>
+        <div class="charts-grid single-col"><div class="chart-container"><div class="chart-header"><span>Evolução de Chamados</span><button class="btn-expand" onclick="openFullscreenMode(8)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="trendChart"></canvas></div></div></div>
+        
+        <div class="charts-grid">
+             <div class="chart-container full-width"><div class="chart-header"><span>Top 10 Solicitantes (Histórico Geral)</span><button class="btn-expand" onclick="openFullscreenMode(27)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="globalRequesterChart"></canvas></div></div>
+             
+             <div class="chart-container">
+                 <div class="chart-header"><span>Top 10 Centros de Custo x Chamados abertos (Geral)</span><button class="btn-expand" onclick="openFullscreenMode(19)">⛶</button></div>
+                 <div class="chart-wrapper-inner" style="height:320px;"><canvas id="generalCCustoChart"></canvas></div>
+                 <div id="obsCCusto" style="text-align:center; font-size:0.75rem; color:var(--text-muted); padding:5px 0; font-style:italic; min-height: 20px;"></div>
+             </div>
+             
+             <div class="chart-container">
+                 <div class="chart-header"><span>Top 10 Funções x Chamados abertos (Geral)</span><button class="btn-expand" onclick="openFullscreenMode(20)">⛶</button></div>
+                 <div class="chart-wrapper-inner" style="height:320px;"><canvas id="generalRoleChart"></canvas></div>
+                 <div id="obsRole" style="text-align:center; font-size:0.75rem; color:var(--text-muted); padding:5px 0; font-style:italic; min-height: 20px;"></div>
+             </div>
+        </div>
+
+        <div class="perf-container" style="margin-top:20px;">
+            <div class="perf-header">Solicitantes x Unidade (Top 5) - Visão Geral</div>
+            <div class="charts-grid">
+                <div class="chart-container"><div class="chart-header"><span>Extrema</span><button class="btn-expand" onclick="openFullscreenMode(28)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="gUnitChartExtrema"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Serra</span><button class="btn-expand" onclick="openFullscreenMode(29)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="gUnitChartSerra"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Embu DCR</span><button class="btn-expand" onclick="openFullscreenMode(30)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="gUnitChartEmbu"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Vila Olímpia</span><button class="btn-expand" onclick="openFullscreenMode(31)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="gUnitChartVila"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Duque de Caxias</span><button class="btn-expand" onclick="openFullscreenMode(32)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="gUnitChartDuque"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Outras Localidades</span><button class="btn-expand" onclick="openFullscreenMode(33)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="gUnitChartOther"></canvas></div></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="tab-equipe" class="tab-content">
+        <div class="charts-grid">
+            <div class="chart-container full-width"><div class="chart-header"><span>Demandas por Unidade</span><button class="btn-expand" onclick="openFullscreenMode(9)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="locationChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Top Analistas (Volume)</span><button class="btn-expand" onclick="openFullscreenMode(10)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="assigneeChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Categorias (Geral)</span><button class="btn-expand" onclick="openFullscreenMode(16)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="categoryChart"></canvas></div></div>
+        </div>
+
+        <div class="perf-container" style="margin-top:20px;">
+            <div class="perf-header">Solicitantes x Principais Unidades (Top 5) - Detalhe Equipe</div>
+            <div class="charts-grid">
+                <div class="chart-container"><div class="chart-header"><span>Extrema</span><button class="btn-expand" onclick="openFullscreenMode(34)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="unitChartExtrema"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Serra</span><button class="btn-expand" onclick="openFullscreenMode(35)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="unitChartSerra"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Embu DCR</span><button class="btn-expand" onclick="openFullscreenMode(36)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="unitChartEmbu"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Vila Olímpia</span><button class="btn-expand" onclick="openFullscreenMode(37)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="unitChartVila"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Duque de Caxias</span><button class="btn-expand" onclick="openFullscreenMode(38)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="unitChartDuque"></canvas></div></div>
+                <div class="chart-container"><div class="chart-header"><span>Outras Localidades</span><button class="btn-expand" onclick="openFullscreenMode(39)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="unitChartOther"></canvas></div></div>
+            </div>
+        </div>
+        
+        <div class="perf-container" style="margin-top: 30px; background: transparent; border: none; box-shadow: none; padding: 0;">
+            <div class="perf-header" style="background: var(--bg-card); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color);">Raio-X da Equipe (Análise de Perfil)</div>
+            <div id="team-insights-grid" class="insight-grid"></div>
+        </div>
+    </div>
+
+    <div id="tab-status" class="tab-content">
+        <div class="charts-grid">
+            <div class="chart-container"><div class="chart-header"><span>Cumprimento de Prazos</span><button class="btn-expand" onclick="openFullscreenMode(12)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="slaChart"></canvas></div></div>
+            <div class="chart-container"><div class="chart-header"><span>Distribuição por Status</span><button class="btn-expand" onclick="openFullscreenMode(13)">⛶</button></div><div class="chart-wrapper-inner"><canvas id="statusChart"></canvas></div></div>
+        </div>
+    </div>
+    <div class="footer">&copy; 2025 Infracommerce</div>
+</div>
+
+<div id="fsModal" class="fs-modal">
+    <button class="fs-nav-btn fs-prev" onclick="changeFullscreenChart(-1)">&#10094;</button>
+    <button class="fs-nav-btn fs-next" onclick="changeFullscreenChart(1)">&#10095;</button>
+    <div class="fs-content">
+        <div class="fs-header"><span id="fsChartTitle">Detalhe</span><button class="fs-close-btn" onclick="closeFullscreenMode()">&times;</button></div>
+        <div class="fs-canvas-wrapper" id="fsCanvasWrapper" style="padding-right: 40px; padding-bottom: 50px;"><canvas id="fsCanvas"></canvas></div>
+        <div class="fs-table-container perf-table-wrapper" id="fsTableWrapper"><table class="perf-table" id="fsTable"><thead></thead><tbody></tbody></table></div>
+        <img src="logo.png" class="fs-logo" alt="Logo FS">
+        <div id="fsFooterMsg" class="fs-footer-msg">Você chegou ao fim da apresentação.</div>
+    </div>
+</div>
+
+<div id="drillDownModal" class="fs-modal" style="z-index: 10005;">
+    <div class="fs-content" style="height: 80vh; width: 90%; max-width: 1000px; display: flex; flex-direction: column;">
+        <div class="fs-header">
+            <span id="ddTitle">Lista de Chamados</span>
+            <button class="fs-close-btn" onclick="closeDrillDown()">&times;</button>
+        </div>
+
+        <div id="ddPagination" class="pagination-controls">
+            <button class="btn-page" onclick="changeDrillDownPage(-1)" id="btnPrev">❮ Anterior</button>
+            <span id="pageInfo">Página 1 de 1 (0 registros)</span>
+            <button class="btn-page" onclick="changeDrillDownPage(1)" id="btnNext">Próximo ❯</button>
+        </div>
+
+        <div class="fs-table-container active" style="display:block; flex:1; overflow-y: auto;">
+            <table class="perf-table" id="ddTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Resumo</th>
+                        <th>Status</th>
+                        <th>Responsável</th>
+                        <th>SLA</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
