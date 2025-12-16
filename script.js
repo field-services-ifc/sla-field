@@ -1,6 +1,9 @@
 // =========================================================================
-// SCRIPT.JS - VERSÃO COM PARSER DE DATA BR E CORREÇÃO MENSAL
+// SCRIPT.JS - VERSÃO TURBO (MATRIZ + CACHE)
 // =========================================================================
+
+// 👇👇👇 COLE SUA URL DO APPS SCRIPT AQUI 👇👇👇
+const API_URL = "https://script.google.com/macros/s/AKfycbzc1yMuNm7u8EjvEPeuui-6f-mCnKADqY8erBZNlXlQkxRzqmfA8GQbdD-vkT029zbCDQ/exec";
 
 // --- 1. CONFIGURAÇÃO E UTILS ---
 
@@ -19,7 +22,6 @@ function logMsg(msg, isError=false) {
 
 const distinctColors = ['#0055FF', '#D32F2F', '#00C853', '#F57C00', '#7B1FA2', '#00ACC1', '#C2185B', '#AFB42B', '#5D4037', '#616161', '#455A64', '#E64A19', '#512DA8', '#1976D2', '#388E3C', '#FBC02D', '#8E24AA', '#0288D1', '#689F38', '#E91E63'];
 
-// LISTA DE NOMES IGNORADOS
 const IGNORED_NAMES = [
     'Automation for Jira', 'JEFERSON PITINGA NOGUEIRA', 'moises.cavalcante', 'MARIANNA LIRA MEDINA',
     'Fabiana Ferreira Garcia de Oliveira', 'Joao Paulo de Macedo Torquato', 'Ramon Marchi',
@@ -36,7 +38,6 @@ const isExcluded = (name) => {
 const STORAGE_KEY = 'ic_dashboard_csv_data';
 let allTickets = [], monthlyData = {}, charts = {};
 
-// --- 2. PLUGIN GLOBAL PARA FULLSCREEN ---
 window.sideLabelsPlugin = {
     id: 'sideLabels',
     afterDatasetsDraw(chart, args, options) {
@@ -50,11 +51,8 @@ window.sideLabelsPlugin = {
                 const meta = chart.getDatasetMeta(datasetIndex); if(meta.hidden) return;
                 const element = meta.data[dataIndex]; if(!element) return;
                 const segmentCenterY = element.getCenterPoint().y;
-                
-                // Detecção de tema para cor do texto
                 const isL = document.body.classList.contains('light-mode');
                 const txtColor = isL ? '#000' : '#fff';
-
                 ctx.save(); ctx.beginPath(); ctx.strokeStyle = dataset.backgroundColor; ctx.lineWidth = 1;
                 ctx.moveTo(stackRightEdge + 5, segmentCenterY); ctx.lineTo(stackRightEdge + 15, segmentCenterY); ctx.stroke();
                 ctx.fillStyle = txtColor;
@@ -71,7 +69,6 @@ function initCharts() {
         if(document.getElementById('chartError')) document.getElementById('chartError').style.display = 'block';
         return;
     }
-
     try {
         if(typeof ChartDataLabels !== 'undefined') {
             Chart.register(ChartDataLabels);
@@ -87,15 +84,12 @@ function initCharts() {
 
     const createChart = (id, type, cfg) => {
         const ctx = document.getElementById(id); if(!ctx) return null;
-        
         const defaultPadding = (type === 'pie' || type === 'doughnut') ? { padding: 20 } : { padding: { top: 30, right: 35, left: 10, bottom: 10 } }; 
-        
         let scalesConfig = {};
         if (type !== 'pie' && type !== 'doughnut') {
             scalesConfig = { x: { grid: { color: '#333' } }, y: { grid: { color: '#333' } } };
             if (cfg.indexAxis === 'y') { scalesConfig.x.grace = '15%'; }
         }
-
         const onClickHandler = (evt, elements, chart) => {
             if (elements.length > 0) {
                 const index = elements[0].index;
@@ -103,7 +97,6 @@ function initCharts() {
                 handleChartClick(id, index, datasetIndex, chart);
             }
         };
-
         return new Chart(ctx, { 
             type: type, 
             data: { labels:[], datasets:[] }, 
@@ -127,13 +120,11 @@ function initCharts() {
     charts.loc = createChart('locationChart', 'bar', {});
     charts.ass = createChart('assigneeChart', 'bar', { indexAxis:'y', plugins: { legend: { display: true, position: 'bottom' } }, layout: { padding: { top: 10, right: 30, left: 10, bottom: 10 } } }); 
     charts.mAss = createChart('monthlyAssigneeChart', 'bar', { ...stackedBarConfig, plugins: { ...stackedBarConfig.plugins, sideLabels: window.sideLabelsPlugin } });
-
     charts.type = createChart('typeChart', 'pie', { plugins: { legend: outsideLabelsConfig } });
     charts.cat = createChart('categoryChart', 'pie', { plugins: { legend: outsideLabelsConfig } });
     charts.sla = createChart('slaChart', 'doughnut', { cutout:'65%', plugins: { legend: outsideLabelsConfig } });
     charts.status = createChart('statusChart', 'bar', {});
     charts.reqGlobal = createChart('globalRequesterChart', 'bar', { indexAxis: 'y' });
-
     charts.mCCusto = createChart('monthlyCCustoChart', 'bar', { indexAxis: 'y' });
     charts.mRole = createChart('monthlyRoleChart', 'bar', { indexAxis: 'y' });
     charts.gCCusto = createChart('generalCCustoChart', 'bar', { indexAxis: 'y' });
@@ -147,10 +138,7 @@ function initCharts() {
         charts[prefix + 'Duque'] = createChart(prefix + 'Duque', 'bar', { indexAxis: 'y' });
         charts[prefix + 'Other'] = createChart(prefix + 'Other', 'bar', { indexAxis: 'y' });
     };
-
-    createUnitCharts('unitChart');
-    createUnitCharts('mUnitChart');
-    createUnitCharts('gUnitChart');
+    createUnitCharts('unitChart'); createUnitCharts('mUnitChart'); createUnitCharts('gUnitChart');
 
     charts.mVol = createChart('monthlyChart', 'line', {});
     charts.mSla = createChart('monthlySlaChart', 'doughnut', { cutout:'65%', plugins: { legend: outsideLabelsConfig } });
@@ -159,38 +147,52 @@ function initCharts() {
     charts.mType = createChart('monthlyTypeChart', 'pie', { plugins: { legend: outsideLabelsConfig } });
     charts.mCat = createChart('monthlyCategoryChart', 'pie', { plugins: { legend: outsideLabelsConfig } });
     charts.mReq = createChart('monthlyRequesterChart', 'bar', { indexAxis: 'y' });
-    
     updateChartTheme();
 }
 
-// --- 4. ARQUIVO E PARSER CORRIGIDO (BR FORMAT) ---
+// --- 4. CARREGAMENTO OTIMIZADO ---
 
 function handleFileSelect(evt) { 
     const file = evt.target.files[0]; 
     if(!file) return; 
-    document.getElementById('currentDate').innerText = file.lastModified ? new Date(file.lastModified).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
+    document.getElementById('currentDate').innerText = new Date().toLocaleString('pt-BR');
     const r = new FileReader(); 
     r.onload = (e) => {
-        const content = e.target.result;
-        try { localStorage.setItem(STORAGE_KEY, content); } catch(err) {}
-        logMsg("Lendo arquivo...");
-        setTimeout(() => processCSV(content), 100); 
+        try { localStorage.setItem(STORAGE_KEY, e.target.result); } catch(err) {}
+        logMsg("Lendo arquivo local...");
+        setTimeout(() => processCSV(e.target.result), 100); 
     };
     r.readAsText(file); 
 }
 
-function loadAutoCSV() {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) { 
-        logMsg("Cache carregado."); 
-        setTimeout(() => processCSV(savedData, true), 500); 
-    } else { 
-        fetch('dados.csv').then(r=>{ 
-            if(!r.ok) throw new Error(); return r.text(); 
-        }).then(t=>{ 
-            logMsg("Dados padrão."); 
-            processCSV(t, true); 
-        }).catch(e=>logMsg("Use o botão Importar.")); 
+async function loadFromGoogle() {
+    if (!API_URL || API_URL.includes("SUA_URL")) {
+        logMsg("Modo Offline (API não configurada).", true);
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        if (savedData) processCSV(savedData, true);
+        return;
+    }
+
+    logMsg("Sincronizando");
+    try {
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error("Erro na conexão");
+        
+        // Agora recebemos uma matriz de arrays, não objetos
+        const rawMatrix = await response.json();
+
+        if (rawMatrix.error) throw new Error(rawMatrix.error);
+        if (!Array.isArray(rawMatrix) || rawMatrix.length < 2) throw new Error("Planilha vazia ou formato inválido");
+
+        processAPIData(rawMatrix);
+        
+    } catch (error) {
+        logMsg("Erro ao buscar dados: " + error.message, true);
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        if (savedData) {
+            logMsg("Usando cache local devido a erro.", true);
+            processCSV(savedData, true);
+        }
     }
 }
 
@@ -200,7 +202,89 @@ function clearLocalData() {
     setTimeout(() => location.reload(), 500); 
 }
 
-function parseCSV(text) {
+const parseDt = (s) => { 
+    if(!s) return null; 
+    try {
+        let cleanS = String(s).replace(/"/g,'').trim();
+        let parts = cleanS.split(' ')[0].split('/');
+        if (parts.length < 3) parts = cleanS.split(' ')[0].split('-');
+        if (parts.length >= 3) {
+            let d = parseInt(parts[0], 10);
+            let m = parseInt(parts[1], 10);
+            let y = parseInt(parts[2], 10);
+            if (y < 100) y += 2000;
+            const dt = new Date(y, m - 1, d);
+            if (!isNaN(dt.getTime())) return dt;
+        }
+        return null;
+    } catch(e) { return null; }
+};
+
+// NOVA FUNÇÃO: PROCESSA MATRIZ CRUA (MUITO MAIS RÁPIDO)
+function processAPIData(matrix) {
+    // Linha 0 são os cabeçalhos
+    const headers = matrix[0].map(h => String(h).trim().toLowerCase());
+    
+    // Mapeia índices das colunas uma única vez
+    const map = {
+        created: headers.findIndex(h=>h.includes('criado')),
+        updated: headers.findIndex(h=>h.includes('atualizado')),
+        deadline: headers.findIndex(h=>h.includes('limite')||h.includes('due')),
+        status: headers.findIndex(h=>h.includes('status')),
+        assignee: headers.findIndex(h=>h.includes('respons')||h.includes('assignee')),
+        type: headers.findIndex(h=>h.includes('tipo')),
+        loc: headers.findIndex(h=>(h.includes('office')||h.includes('local')) && !h.includes('categor')),
+        id: headers.findIndex(h=>h.includes('chave')||h.includes('key')),
+        summary: headers.findIndex(h=>h.includes('resumo')),
+        reporter: headers.findIndex(h=>h.includes('relator')),
+        category: headers.findIndex(h=>h.includes('category')||h.includes('categor')),
+        ccusto: headers.findIndex(h=>h.includes('ccusto')||h.includes('centro')),
+        role: headers.findIndex(h=>h.includes('funcao')||h.includes('função'))
+    };
+
+    const data = [];
+    let maxDate = 0;
+
+    // Loop direto na matriz (começando da linha 1)
+    for (let i = 1; i < matrix.length; i++) {
+        const row = matrix[i];
+        if (row.length < 3) continue;
+
+        // Pega valor pelo índice (acesso direto é instantâneo)
+        const cDt = parseDt(row[map.created]);
+        
+        if (cDt) {
+            if (cDt.getTime() > maxDate) maxDate = cDt.getTime();
+            const clean = (idx) => (idx > -1 && row[idx]) ? String(row[idx]).trim() : 'N/A';
+            
+            data.push({
+                created: cDt,
+                updated: parseDt(row[map.updated]),
+                deadline: parseDt(row[map.deadline]),
+                status: clean(map.status),
+                assignee: clean(map.assignee),
+                type: clean(map.type),
+                location: map.loc > -1 ? String(row[map.loc]).trim() : 'Geral',
+                id: map.id > -1 ? String(row[map.id]).trim() : `REQ-${i}`,
+                summary: map.summary > -1 ? String(row[map.summary]).trim() : 'Sem resumo',
+                reporter: map.reporter > -1 ? String(row[map.reporter]).trim() : 'Desconhecido',
+                category: map.category > -1 ? String(row[map.category]).trim() : 'Outros',
+                ccusto: clean(map.ccusto),
+                role: clean(map.role)
+            });
+        }
+    }
+
+    if (data.length === 0) { logMsg("Nenhum dado válido.", true); return; }
+    if (maxDate > 0) document.getElementById('currentDate').innerText = new Date(maxDate).toLocaleString('pt-BR');
+    
+    allTickets = data;
+    recalculateKPIs(data);
+    logMsg(`Sincronizado: ${data.length} registros.`);
+}
+
+function processCSV(text, isAuto=false) {
+    // Mantido para fallback manual
     const cleanText = text.replace(/^\uFEFF/, '');
     const rows = []; let currentRow = []; let currentCell = ''; let insideQuotes = false;
     const firstLineEnd = cleanText.indexOf('\n');
@@ -219,105 +303,9 @@ function parseCSV(text) {
         } else { currentCell += char; }
     }
     if (currentCell || currentRow.length > 0) { currentRow.push(currentCell.trim()); rows.push(currentRow); }
-    return { rows, sep };
-}
-
-function processCSV(text, isAuto=false) {
-    if(!text) return;
-    const result = parseCSV(text); const rows = result.rows;
-    if(rows.length < 2) { logMsg("CSV Inválido.", true); return; }
     
-    const headers = rows[0].map(h => h.replace(/"/g,'').trim().toLowerCase());
-    const map = { 
-        created: headers.findIndex(h=>h.includes('criado')||h.includes('created')), 
-        updated: headers.findIndex(h=>h.includes('atualizado')||h.includes('updated')), 
-        deadline: headers.findIndex(h=>h.includes('limite')||h.includes('due')), 
-        status: headers.findIndex(h=>h.includes('status')), 
-        assignee: headers.findIndex(h=>h.includes('respons')||h.includes('assignee')), 
-        type: headers.findIndex(h=>h.includes('tipo')||h.includes('type')), 
-        loc: headers.findIndex(h=>(h.includes('office')||h.includes('local')||h.includes('campo')) && !h.includes('categor')), 
-        id: headers.findIndex(h=>h.includes('chave')||h.includes('issue id')||h.includes('key')||h.includes('número')),
-        summary: headers.findIndex(h=>h.includes('resumo')||h.includes('summary')),
-        reporter: headers.findIndex(h=>h.includes('relator')||h.includes('reporter')),
-        category: headers.findIndex(h=>h.includes('categoria')||h.includes('category')),
-        ccusto: headers.findIndex(h=>h.includes('ccusto')||h.includes('centro')), 
-        role: headers.findIndex(h=>h.includes('funcao')||h.includes('função'))
-    };
-    
-    if(map.created===-1 || map.status===-1){ logMsg(`Erro: Coluna 'Criado' ou 'Status' não achada.`, true); return; }
-    
-    const data = []; let maxDate = 0;
-    
-    // --- PARSER ESPECIAL PARA DD/MM/YY ---
-    const parseDt = (s) => { 
-        if(!s) return null; 
-        try {
-            // Remove aspas e pega a parte da data
-            let cleanS = s.replace(/"/g,'').trim();
-            // Tenta dividir por barra (formato BR)
-            let parts = cleanS.split(' ')[0].split('/');
-            
-            // Se não funcionou, tenta hífen
-            if (parts.length < 3) parts = cleanS.split(' ')[0].split('-');
-            
-            if (parts.length >= 3) {
-                let d = parseInt(parts[0], 10);
-                let m = parseInt(parts[1], 10);
-                let y = parseInt(parts[2], 10);
-                
-                // Correção de ano de 2 dígitos
-                if (y < 100) y += 2000;
-                
-                // Mês em JS é base 0 (Jan = 0)
-                const dt = new Date(y, m - 1, d);
-                
-                // Validação básica
-                if (!isNaN(dt.getTime())) return dt;
-            }
-            return null;
-        } catch(e) { return null; }
-    };
-
-    for(let i=1; i<rows.length; i++) {
-        const row = rows[i]; if(row.length < 3) continue; 
-        const clean = (val) => val ? val.replace(/"/g,'').trim() : 'N/A';
-        
-        const cDt = parseDt(row[map.created]); 
-        const uDt = parseDt(row[map.updated]);
-        const dDt = parseDt(row[map.deadline]);
-
-        if(isAuto && cDt && cDt.getTime() > maxDate) maxDate = cDt.getTime();
-        
-        let rawCCusto = (map.ccusto > -1 && row[map.ccusto]) ? clean(row[map.ccusto]) : 'N/A';
-        let rawRole = (map.role > -1 && row[map.role]) ? clean(row[map.role]) : 'N/A';
-
-        // Só adiciona se tiver Data de Criação válida
-        if(cDt) {
-            data.push({ 
-                created: cDt, 
-                updated: uDt, 
-                deadline: dDt, 
-                status: clean(row[map.status]), 
-                assignee: map.assignee > -1 ? (clean(row[map.assignee])||'N/A') : 'N/A', 
-                type: clean(row[map.type]), 
-                location: map.loc>-1?clean(row[map.loc]):'Geral',
-                id: map.id > -1 ? clean(row[map.id]) : `REQ-${i}`,
-                summary: map.summary > -1 ? clean(row[map.summary]) : 'Sem resumo',
-                reporter: map.reporter > -1 ? clean(row[map.reporter]) : 'Desconhecido',
-                category: map.category > -1 ? clean(row[map.category]) : 'Outros',
-                ccusto: rawCCusto, 
-                role: rawRole
-            });
-        }
-    }
-
-    if(data.length === 0) { logMsg("Nenhuma data válida encontrada.", true); return; }
-    if(isAuto && maxDate > 0) document.getElementById('currentDate').innerText = new Date(maxDate).toLocaleString('pt-BR');
-    
-    allTickets = data; 
-    recalculateKPIs(data);
-    
-    if(localStorage.getItem(STORAGE_KEY)) logMsg(`Carregado: ${data.length} registros.`); else logMsg(`Importado: ${data.length} registros.`);
+    if(rows.length < 2) return;
+    processAPIData(rows); // Reutiliza a função otimizada
 }
 
 function calculateBusinessTime(start, end) {
@@ -352,17 +340,11 @@ function getTop10(data, key) {
     return Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 10);
 }
 
-// --- 5. LÓGICA DE KPIS E GRÁFICOS ---
-
 function recalculateKPIs(data) {
     const s = {trend:{},loc:{},ass:{},type:{},status:{},cat:{},rep:{},slaOk:0,slaTot:0,durSum:0,durCount:0};
-    
-    // Reseta monthlyData para garantir limpeza
     monthlyData={}; 
 
     data.forEach(t => {
-        // Popula monthlyData ANTES de excluir, para garantir que as abas funcionem
-        // mesmo se o mês só tiver chamados de automação
         if(t.created) {
             const y = t.created.getFullYear().toString(); 
             const m = (t.created.getMonth()+1).toString(); 
@@ -370,13 +352,10 @@ function recalculateKPIs(data) {
             if(!monthlyData[y][m]) monthlyData[y][m]=[]; 
             monthlyData[y][m].push(t); 
         }
-
         if(isExcluded(t.reporter)) return; 
-
         const k = `${String(t.created.getMonth()+1).padStart(2,'0')}/${t.created.getFullYear().toString().substr(2)}`;
         s.trend[k]=(s.trend[k]||0)+1; s.loc[t.location]=(s.loc[t.location]||0)+1; s.type[t.type]=(s.type[t.type]||0)+1; s.status[t.status]=(s.status[t.status]||0)+1; s.cat[t.category]=(s.cat[t.category]||0)+1; s.rep[t.reporter]=(s.rep[t.reporter]||0)+1;
         if(!isExcluded(t.assignee) && t.assignee !== 'N/A') s.ass[t.assignee]=(s.ass[t.assignee]||0)+1;
-        
         const statusLower = t.status.toLowerCase();
         const isRes = ['resolvido','fechada','concluído','concluido','done','fechado'].some(x => statusLower.includes(x));
         const isCanc = statusLower.includes('cancelado');
@@ -384,7 +363,6 @@ function recalculateKPIs(data) {
         if(isRes && t.updated && !isCanc) { const d = calculateBusinessTime(t.created, t.updated); if(d>0){ s.durSum+=d; s.durCount++; } }
     });
     
-    // Atualiza KPIs do Header
     document.getElementById('kpiTotal').innerText = data.length; 
     const slaVal = s.slaTot ? ((s.slaOk/s.slaTot)*100) : 0;
     const elKpiSla = document.getElementById('kpiSLA');
@@ -394,16 +372,11 @@ function recalculateKPIs(data) {
     document.getElementById('kpiSMA').innerText = s.durCount?formatDuration(s.durSum/s.durCount):"-";
     const topL = Object.entries(s.loc).sort((a,b)=>b[1]-a[1])[0]; document.getElementById('kpiLocation').innerText = topL?topL[0]:"-";
     
-    // --- ATUALIZAÇÃO DOS GRÁFICOS (ABA GERAL) ---
     const updateC = (k,l,d,p={}) => { 
         if(!charts[k]) return; 
         charts[k].data.labels=l; 
         charts[k].data.datasets=[{
-            data:d,
-            backgroundColor:p.bg||'#8680b1',
-            borderColor:p.bd||'#8680b1',
-            fill:p.fill||false,
-            label: p.label || 'Volume'
+            data:d, backgroundColor:p.bg||'#8680b1', borderColor:p.bd||'#8680b1', fill:p.fill||false, label: p.label || 'Volume'
         }]; 
         if(p.multi)charts[k].data.datasets[0].backgroundColor=p.bg; 
         charts[k].update(); 
@@ -464,7 +437,6 @@ function recalculateKPIs(data) {
     updateUnitRequesterCharts(data, 'gUnitChart'); 
     updateUnitRequesterCharts(data, 'unitChart');
 
-    // Inicializa a aba mensal com os dados populados
     initMonthlyTab(); 
     updateChartTheme();
 }
@@ -571,7 +543,6 @@ function updateMonthlyView() {
     const sType = {}; createdInMonth.forEach(t => { sType[t.type] = (sType[t.type] || 0) + 1; });
     if(charts.mType) { charts.mType.data.labels = Object.keys(sType); charts.mType.data.datasets = [{ data: Object.values(sType), backgroundColor: distinctColors, label: 'Tipos' }]; charts.mType.update(); }
     
-    // Categorias agrupadas (MENSAL)
     const sCat = {}; createdInMonth.forEach(t => { sCat[t.category] = (sCat[t.category] || 0) + 1; });
     const groupedCat = {}; let lowVol = 0;
     Object.entries(sCat).forEach(([k, v]) => { if(v < 5) lowVol += v; else groupedCat[k] = v; });
@@ -596,8 +567,6 @@ function updateMonthlyView() {
     const topRole = getTop10(createdInMonth, 'role');
     charts.mRole.data.labels = topRole.map(x => x[0]); charts.mRole.data.datasets = [{ data: topRole.map(x => x[1]), backgroundColor: '#E64A19', label: 'Chamados' }]; charts.mRole.update();
 }
-
-// --- 6. FUNÇÕES GERAIS E NAVEGAÇÃO ---
 
 function handleChartClick(chartId, index, datasetIndex, chart) {
     const clickedLabel = chart.data.labels[index];
@@ -706,7 +675,6 @@ function openTab(evt, tabName) {
     const target = document.getElementById(tabName);
     if (target) target.classList.add("active");
     if (evt && evt.currentTarget) evt.currentTarget.classList.add("active");
-    // Redimensiona gráficos ao trocar de aba
     setTimeout(() => { Object.values(charts).forEach(c => c && typeof c.resize === 'function' && c.resize()); }, 50);
 }
 
@@ -719,9 +687,7 @@ function downloadCSV() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); 
 }
 
-// --- 7. FULLSCREEN E NAVEGAÇÃO TRAVADA ---
 let fsIdx=0, fsChart=null;
-
 const fsTitles = {
     0: "Volume de Aberturas (Mensal)", 1: "SLA (Entregas)", 2: "Backlog (Status do Mês)", 3: "Tipos (Demanda)", 
     4: "Top Unidades (Entregas)", 5: "Analistas x Unidade (Entregas)", 
@@ -736,7 +702,6 @@ const fsTitles = {
     34: "Extrema (Equipe)", 35: "Serra (Equipe)", 36: "Embu DCR (Equipe)", 37: "Vila Olímpia (Equipe)", 38: "Duque de Caxias (Equipe)", 39: "Outras (Equipe)"
 };
 
-// Grupos para navegação travada por aba
 const chartGroups = {
     'mensal': [0, 1, 2, 3, 4, 14, 15, 17, 18, 5, 21, 22, 23, 24, 25, 26],
     'geral': [8, 27, 19, 20, 28, 29, 30, 31, 32, 33],
@@ -775,15 +740,12 @@ function changeFullscreenChart(d) {
             break;
         }
     }
-
     if (!currentGroup) {
-        // Se for tabela ou fora de grupo, não faz nada
         if(fsIdx === 6 || fsIdx === 7) return; 
         fsIdx += d; 
     } else {
         const currentIndexInGroup = currentGroup.indexOf(fsIdx);
         const newIndexInGroup = currentIndexInGroup + d;
-        // Trava navegação se tentar sair do grupo
         if (newIndexInGroup >= 0 && newIndexInGroup < currentGroup.length) {
             fsIdx = currentGroup[newIndexInGroup];
         }
@@ -795,10 +757,8 @@ function renderFs() {
     document.getElementById('fsChartTitle').innerText = fsTitles[fsIdx] || "Detalhe";
     const cvsWrap = document.getElementById('fsCanvasWrapper'); 
     const tblWrap = document.getElementById('fsTableWrapper');
-    
     const prevBtn = document.querySelector('.fs-prev');
     const nextBtn = document.querySelector('.fs-next');
-    
     let currentGroup = null;
     for (const groupName in chartGroups) { if (chartGroups[groupName].includes(fsIdx)) { currentGroup = chartGroups[groupName]; break; } }
     
@@ -806,7 +766,6 @@ function renderFs() {
         const idxInGroup = currentGroup.indexOf(fsIdx);
         prevBtn.style.opacity = idxInGroup === 0 ? '0.3' : '1';
         prevBtn.style.pointerEvents = idxInGroup === 0 ? 'none' : 'auto';
-        
         nextBtn.style.opacity = idxInGroup === currentGroup.length - 1 ? '0.3' : '1';
         nextBtn.style.pointerEvents = idxInGroup === currentGroup.length - 1 ? 'none' : 'auto';
         prevBtn.style.display = 'block'; nextBtn.style.display = 'block';
@@ -817,13 +776,10 @@ function renderFs() {
     if(fsIdx !== 6 && fsIdx !== 7) {
         cvsWrap.style.display = 'block'; tblWrap.classList.remove('active');
         const targetChart = getChartByIndex(fsIdx);
-        
         if(targetChart) {
             const ctx = document.getElementById('fsCanvas'); if(fsChart) fsChart.destroy();
             const isLight = document.body.classList.contains('light-mode'); 
-            // CORREÇÃO: No Dark Mode, fonte BRANCA
             const fsColor = isLight ? '#000000' : '#FFFFFF';
-            
             const cfg = { 
                 type: targetChart.config.type, 
                 data: JSON.parse(JSON.stringify(targetChart.config.data)), 
@@ -832,19 +788,11 @@ function renderFs() {
                     maintainAspectRatio: false, 
                     plugins: { 
                         ...targetChart.config.options.plugins, 
-                        legend: { 
-                            display: true, 
-                            position: 'bottom', 
-                            labels: { 
-                                color: fsColor, 
-                                filter: (i)=>i.text!=='Total', 
-                                font: { size: 14 } 
-                            } 
-                        },
+                        legend: { display: true, position: 'bottom', labels: { color: fsColor, filter: (i)=>i.text!=='Total', font: { size: 14 } } },
                         datalabels: { ...targetChart.config.options.plugins.datalabels, font: { size: 14 } }
                     }, 
                     layout: { padding: 20 },
-                    scales: targetChart.config.options.scales, // Mantém escalas (grace)
+                    scales: targetChart.config.options.scales,
                     onClick: (evt, elements, chart) => {
                         if (elements.length > 0) {
                             const index = elements[0].index;
@@ -854,19 +802,10 @@ function renderFs() {
                     }
                 } 
             };
-            
-            // Força cor da fonte e grid no fullscreen se estiver dark (default)
             if (!isLight && cfg.options.scales) {
-                if (cfg.options.scales.x) { 
-                    cfg.options.scales.x.ticks = { ...cfg.options.scales.x.ticks, color: '#FFF' };
-                    cfg.options.scales.x.grid = { ...cfg.options.scales.x.grid, color: '#444' };
-                }
-                if (cfg.options.scales.y) { 
-                    cfg.options.scales.y.ticks = { ...cfg.options.scales.y.ticks, color: '#FFF' };
-                    cfg.options.scales.y.grid = { ...cfg.options.scales.y.grid, color: '#444' };
-                }
+                if (cfg.options.scales.x) { cfg.options.scales.x.ticks = { ...cfg.options.scales.x.ticks, color: '#FFF' }; cfg.options.scales.x.grid = { ...cfg.options.scales.x.grid, color: '#444' }; }
+                if (cfg.options.scales.y) { cfg.options.scales.y.ticks = { ...cfg.options.scales.y.ticks, color: '#FFF' }; cfg.options.scales.y.grid = { ...cfg.options.scales.y.grid, color: '#444' }; }
             }
-
             if(fsIdx === 5) { cfg.options.plugins.sideLabels = window.sideLabelsPlugin; }
             fsChart = new Chart(ctx, cfg);
         }
@@ -879,95 +818,44 @@ function renderFs() {
 }
 document.addEventListener('keydown', e => { if(document.getElementById('fsModal').classList.contains('open')) { if(e.key=='ArrowLeft')changeFullscreenChart(-1); if(e.key=='ArrowRight')changeFullscreenChart(1); if(e.key=='Escape')closeFullscreenMode(); } });
 
-// --- 8. DRILL DOWN ---
-let currentDrillData = [];
-let drillPage = 1;
-const DRILL_PER_PAGE = 10;
-
-function openDrillDown(data, title) {
-    currentDrillData = data;
-    drillPage = 1;
-    document.getElementById('ddTitle').innerText = title;
-    document.getElementById('drillDownModal').classList.add('open');
-    renderDrillDownTable();
-}
-
-function closeDrillDown() {
-    document.getElementById('drillDownModal').classList.remove('open');
-}
-
-function changeDrillDownPage(d) {
-    const maxPage = Math.ceil(currentDrillData.length / DRILL_PER_PAGE) || 1;
-    drillPage += d;
-    if (drillPage < 1) drillPage = 1;
-    if (drillPage > maxPage) drillPage = maxPage;
-    renderDrillDownTable();
-}
-
+let currentDrillData = []; let drillPage = 1; const DRILL_PER_PAGE = 10;
+function openDrillDown(data, title) { currentDrillData = data; drillPage = 1; document.getElementById('ddTitle').innerText = title; document.getElementById('drillDownModal').classList.add('open'); renderDrillDownTable(); }
+function closeDrillDown() { document.getElementById('drillDownModal').classList.remove('open'); }
+function changeDrillDownPage(d) { const maxPage = Math.ceil(currentDrillData.length / DRILL_PER_PAGE) || 1; drillPage += d; if (drillPage < 1) drillPage = 1; if (drillPage > maxPage) drillPage = maxPage; renderDrillDownTable(); }
 function renderDrillDownTable() {
-    const tbody = document.querySelector('#ddTable tbody');
-    tbody.innerHTML = '';
-    const total = currentDrillData.length;
-    const maxPage = Math.ceil(total / DRILL_PER_PAGE) || 1;
-    const start = (drillPage - 1) * DRILL_PER_PAGE;
-    const end = start + DRILL_PER_PAGE;
+    const tbody = document.querySelector('#ddTable tbody'); tbody.innerHTML = '';
+    const total = currentDrillData.length; const maxPage = Math.ceil(total / DRILL_PER_PAGE) || 1;
+    const start = (drillPage - 1) * DRILL_PER_PAGE; const end = start + DRILL_PER_PAGE;
     const pageData = currentDrillData.slice(start, end);
-
     document.getElementById('pageInfo').innerText = `Página ${drillPage} de ${maxPage} (${total} registros)`;
     document.getElementById('btnPrev').disabled = drillPage === 1;
     document.getElementById('btnNext').disabled = drillPage === maxPage;
-
     pageData.forEach(t => {
         const tr = document.createElement('tr');
-        
         let slaBadge = '<span class="status-pill pill-gray">-</span>';
         if(t.deadline) {
             const isRes = ['resolvido','fechada','concluído'].some(x => t.status.toLowerCase().includes(x));
             const isOk = (isRes && t.updated <= t.deadline) || (!isRes && new Date() <= t.deadline);
-            slaBadge = isOk 
-                ? '<span class="status-pill pill-success">No Prazo</span>' 
-                : '<span class="status-pill pill-danger">Atrasado</span>';
+            slaBadge = isOk ? '<span class="status-pill pill-success">No Prazo</span>' : '<span class="status-pill pill-danger">Atrasado</span>';
         }
-
-        tr.innerHTML = `
-            <td>${t.id}</td>
-            <td>${t.summary}</td>
-            <td>${t.status}</td>
-            <td>${t.assignee}</td>
-            <td>${slaBadge}</td>
-        `;
+        tr.innerHTML = `<td>${t.id}</td><td>${t.summary}</td><td>${t.status}</td><td>${t.assignee}</td><td>${slaBadge}</td>`;
         tbody.appendChild(tr);
     });
 }
 
-// --- 9. TEMA E CORES ---
-
 function updateChartTheme() {
     const isLight = document.body.classList.contains('light-mode');
-    
-    // Se isLight for false (Dark Mode), texto deve ser BRANCO
     const txtC = isLight ? '#000000' : '#FFFFFF'; 
     const gridC = isLight ? '#DADCE0' : '#444'; 
-    
-    // Força padrões globais
     Chart.defaults.color = txtC;
     Chart.defaults.borderColor = gridC;
-
     Object.values(charts).forEach(c => {
         if (!c) return;
         if (c.options.scales) {
-            if (c.options.scales.x) {
-                c.options.scales.x.grid.color = gridC;
-                c.options.scales.x.ticks.color = txtC;
-            }
-            if (c.options.scales.y) {
-                c.options.scales.y.grid.color = gridC;
-                c.options.scales.y.ticks.color = txtC;
-            }
+            if (c.options.scales.x) { c.options.scales.x.grid.color = gridC; c.options.scales.x.ticks.color = txtC; }
+            if (c.options.scales.y) { c.options.scales.y.grid.color = gridC; c.options.scales.y.ticks.color = txtC; }
         }
-        if (c.options.plugins && c.options.plugins.legend) {
-            c.options.plugins.legend.labels.color = txtC;
-        }
+        if (c.options.plugins && c.options.plugins.legend) { c.options.plugins.legend.labels.color = txtC; }
         c.update();
     });
 }
@@ -979,12 +867,9 @@ function toggleTheme() {
     updateChartTheme();
 }
 
-function handleMetricClick(label, metricType, context) {
-    console.log(`Clique em métrica: ${label}, ${metricType}, ${context}`);
-}
+function handleMetricClick(label, metricType, context) { console.log(`Clique em métrica: ${label}, ${metricType}, ${context}`); }
 
-// --- 10. INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initCharts, 100);
-    setTimeout(loadAutoCSV, 500);
+    setTimeout(loadFromGoogle, 500);
 });
